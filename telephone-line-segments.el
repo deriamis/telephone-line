@@ -217,10 +217,10 @@ If it doesn't exist, create and cache it."
   "Displays the project name, according to project.el"
   (if (project-current)
       (propertize (if (stringp telephone-line-project-custom-name)
-          telephone-line-project-custom-name
-        (file-name-nondirectory
-         (directory-file-name
-          (project-root (project-current)))))
+                   telephone-line-project-custom-name
+                   (file-name-nondirectory
+                    (directory-file-name
+                     (project-root (project-current)))))
                   'face 'telephone-line-projectile
                   'display '(raise 0.0)
                   'help-echo "Switch project"
@@ -291,27 +291,63 @@ Configure the face group telephone-line-evil to change the colors per-mode."
      (if (boundp 'flymake--mode-line-format) flymake--mode-line-format
        flymake-mode-line-format) t)))
 
+(defun flycheck-icon-formatter (icon count)
+  (if (bound-and-true-p flycheck-indicator-mode)
+    (cond ((eq icon 'info)    (propertize
+                                (format "%c%d" (string-to-char flycheck-indicator-icon-info) count)
+                                'face 'telephone-line-unimportant))
+          ((eq icon 'warning) (propertize
+                                (format "%c%d" (string-to-char flycheck-indicator-icon-warning) count)
+                                'face 'telephone-line-warning))
+          ((eq icon 'error)   (propertize
+                                (format "%c%d" (string-to-char flycheck-indicator-icon-error) count)
+                                'face 'telephone-line-error)))
+
+    (cond ((eq icon 'info)    (propertize
+                                (format "?%d" count)
+                                'face 'telephone-line-unimportant))
+          ((eq icon 'warning) (propertize
+                                (format "!%d" count)
+                                'face 'telephone-line-warning))
+          ((eq icon 'error)   (propertize
+                                (format "#%d" count)
+                                'face 'telephone-line-error)))))
+
+(defun flycheck-status-formatter (status)
+  (if (bound-and-true-p flycheck-indicator-mode)
+    (format "%c" (string-to-char (alist-get status flycheck-indicator-status-icons (symbol-name status))))
+    (cond ((eq status 'running)    ":)")
+          ((eq status 'no-checker  "-"))
+          ((eq status 'not-checked "="))
+          ((eq status 'errored)    "!")
+          ((eq status 'interrupted "."))
+          ((eq status 'suspicious  "?")))))
+
 (telephone-line-defsegment telephone-line-flycheck-segment ()
   "Displays current checker state."
   (when (bound-and-true-p flycheck-mode)
     (let* ((text (pcase flycheck-last-status-change
                    ('finished (if flycheck-current-errors
                                   (let-alist (flycheck-count-errors flycheck-current-errors)
-                                    (if (or .error .warning)
-                                        (propertize (format "Problems: %s/%s"
-                                                            (or .error 0) (or .warning 0))
-                                                    'face 'telephone-line-warning)
+                                    (if (or .error .warning .info)
+                                      (let ((errors   (or .error 0))
+                                            (warnings (or .warning 0))
+                                            (info     (or .info 0)))
+                                        (concat
+                                          (flycheck-icon-formatter 'error errors) " "
+                                          (flycheck-icon-formatter 'warning warnings) " "
+                                          (flycheck-icon-formatter 'info info)))
                                       ""))
-                                (propertize ":)" 'face 'telephone-line-unimportant)))
-                   ('running     "*")
-                   ('no-checker  (propertize "-" 'face 'telephone-line-unimportant))
-                   ('not-checked "=")
-                   ('errored     (propertize "!" 'face 'telephone-line-error))
-                   ('interrupted (propertize "." 'face 'telephone-line-error))
-                   ('suspicious  "?"))))
+                                (propertize (flycheck-status-formatter 'finished) 'face 'telephone-line-unimportant)))
+                   ('running     (flycheck-status-formatter 'running))
+                   ('no-checker  (propertize (flycheck-status-formatter 'no-checker) 'face 'telephone-line-unimportant))
+                   ('not-checked (flycheck-status-formatter 'not-checked))
+                   ('errored     (propertize (flycheck-status-formatter 'errored) 'face 'telephone-line-error))
+                   ('interrupted (propertize (flycheck-status-formatter 'interrupted) 'face 'telephone-line-error))
+                   ('suspicious  (flycheck-status-formatter 'suspicious)))))
       (propertize text
                   'help-echo (pcase flycheck-last-status-change
-                               ('finished "Display errors found by Flycheck")
+                               ('finished "Display items found by Flycheck")
                                ('running "Running...")
                                ('no-checker "No Checker")
                                ('not-checked "Not Checked")
